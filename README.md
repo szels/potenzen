@@ -4,12 +4,13 @@ Eine interaktive Single-Page-App zum Trainieren von Quadratzahlen (x²) und drit
 
 ## Features
 
-- 10 Multiple-Choice-Fragen pro Runde
+- 60-Sekunden-Timer - beantworte so viele Fragen wie möglich
 - Zufällige Potenzen-Aufgaben (Quadratzahlen und dritte Potenzen)
-- Highscore-System mit LocalStorage
+- Highscore-System mit LocalStorage (speichert Anzahl und Zeit)
 - Responsives Design
-- Sofortiges Feedback bei Antworten
-- Fortschrittsanzeige
+- Sofortiges Feedback bei Antworten (kurze Flash-Animation)
+- Countdown-Timer mit visueller Warnung
+- Fortschrittsanzeige der verbleibenden Zeit
 
 ## Deployment auf GitHub Pages
 

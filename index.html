@@ -189,6 +189,48 @@
             line-height: 1.6;
             margin-bottom: 20px;
         }
+
+        .timer {
+            font-size: 3em;
+            font-weight: bold;
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .timer.warning {
+            color: #dc3545;
+            animation: pulse 0.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .answer-btn.flash-correct {
+            animation: flashGreen 0.3s;
+        }
+
+        .answer-btn.flash-wrong {
+            animation: flashRed 0.3s;
+        }
+
+        @keyframes flashGreen {
+            0%, 100% { background: white; }
+            50% { background: #28a745; color: white; }
+        }
+
+        @keyframes flashRed {
+            0%, 100% { background: white; }
+            50% { background: #dc3545; color: white; }
+        }
+
+        .time-display {
+            font-size: 1.2em;
+            color: #6c757d;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -199,12 +241,13 @@
         <div id="startScreen" class="start-screen">
             <div class="intro-text">
                 <p>Trainiere dein Kopfrechnen mit Quadratzahlen (x²) und dritten Potenzen (x³)!</p>
-                <p>Beantworte 10 Fragen und erreiche einen neuen Highscore.</p>
+                <p>Du hast 60 Sekunden Zeit - beantworte so viele Fragen wie möglich!</p>
             </div>
             <div class="stats">
                 <div class="stat">
                     <div class="stat-label">Highscore</div>
                     <div class="stat-value" id="highscoreDisplay">0</div>
+                    <div class="time-display" id="highscoreTime"></div>
                 </div>
             </div>
             <button class="start-btn" onclick="startQuiz()">Quiz Starten</button>
@@ -212,13 +255,14 @@
 
         <!-- Quiz Screen -->
         <div id="quizScreen" class="hidden">
+            <div class="timer" id="timer">60</div>
             <div class="progress-bar">
                 <div class="progress-fill" id="progressFill"></div>
             </div>
             <div class="stats">
                 <div class="stat">
-                    <div class="stat-label">Frage</div>
-                    <div class="stat-value" id="questionNumber">1/10</div>
+                    <div class="stat-label">Beantwortet</div>
+                    <div class="stat-value" id="questionCount">0</div>
                 </div>
                 <div class="stat">
                     <div class="stat-label">Richtig</div>
@@ -235,21 +279,59 @@
         <div id="resultScreen" class="hidden result-screen">
             <div class="result-message" id="resultMessage"></div>
             <div class="score-display" id="finalScore"></div>
+            <div class="time-display" id="finalTime"></div>
             <div id="highscoreBadge" class="hidden">
                 <div class="highscore-badge">🏆 Neuer Highscore!</div>
+            </div>
+            <div class="stats" style="margin-top: 30px;">
+                <div class="stat">
+                    <div class="stat-label">Dein Highscore</div>
+                    <div class="stat-value" id="resultHighscore">0</div>
+                    <div class="time-display" id="resultHighscoreTime"></div>
+                </div>
             </div>
             <button class="restart-btn" onclick="restartQuiz()">Nochmal Spielen</button>
         </div>
     </div>
 
     <script>
-        let currentQuestion = 0;
         let correctAnswers = 0;
-        let questions = [];
-        let highscore = localStorage.getItem('potenzenHighscore') || 0;
+        let totalAnswers = 0;
+        let timeLeft = 60;
+        let timerInterval = null;
+        let currentCorrectAnswer = null;
+        let isAnswering = false;
 
-        // Initialize
-        document.getElementById('highscoreDisplay').textContent = highscore;
+        // Load highscore
+        let savedHighscore;
+        try {
+            savedHighscore = JSON.parse(localStorage.getItem('potenzenHighscore') || '{"score": 0, "time": 0}');
+        } catch (e) {
+            savedHighscore = {score: 0, time: 0};
+        }
+        let highscore = savedHighscore.score || 0;
+        let highscoreTime = savedHighscore.time || 0;
+
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            updateHighscoreDisplay();
+        });
+
+        function updateHighscoreDisplay() {
+            const highscoreDisplayEl = document.getElementById('highscoreDisplay');
+            const highscoreTimeEl = document.getElementById('highscoreTime');
+
+            if (highscoreDisplayEl) {
+                highscoreDisplayEl.textContent = highscore;
+            }
+            if (highscoreTimeEl) {
+                if (highscore > 0) {
+                    highscoreTimeEl.textContent = `in ${highscoreTime}s`;
+                } else {
+                    highscoreTimeEl.textContent = '';
+                }
+            }
+        }
 
         function generateQuestion() {
             const base = Math.floor(Math.random() * 15) + 2; // 2-16
@@ -280,33 +362,53 @@
         }
 
         function startQuiz() {
-            currentQuestion = 0;
             correctAnswers = 0;
-            questions = [];
-
-            // Generate 10 questions
-            for (let i = 0; i < 10; i++) {
-                questions.push(generateQuestion());
-            }
+            totalAnswers = 0;
+            timeLeft = 60;
+            isAnswering = false;
 
             document.getElementById('startScreen').classList.add('hidden');
             document.getElementById('quizScreen').classList.remove('hidden');
 
+            // Start timer
+            updateTimer();
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                updateTimer();
+
+                if (timeLeft <= 0) {
+                    endQuiz();
+                }
+            }, 1000);
+
             showQuestion();
         }
 
-        function showQuestion() {
-            if (currentQuestion >= questions.length) {
-                showResults();
-                return;
+        function updateTimer() {
+            const timerElement = document.getElementById('timer');
+            timerElement.textContent = timeLeft;
+
+            // Add warning class when time is low
+            if (timeLeft <= 10) {
+                timerElement.classList.add('warning');
+            } else {
+                timerElement.classList.remove('warning');
             }
 
-            const q = questions[currentQuestion];
+            // Update progress bar
+            const progress = (timeLeft / 60) * 100;
+            document.getElementById('progressFill').style.width = `${progress}%`;
+        }
+
+        function showQuestion() {
+            if (timeLeft <= 0) return;
+
+            const q = generateQuestion();
+            currentCorrectAnswer = q.correctAnswer;
 
             // Update stats
-            document.getElementById('questionNumber').textContent = `${currentQuestion + 1}/10`;
+            document.getElementById('questionCount').textContent = totalAnswers;
             document.getElementById('correctCount').textContent = correctAnswers;
-            document.getElementById('progressFill').style.width = `${((currentQuestion) / 10) * 100}%`;
 
             // Show question
             document.getElementById('question').innerHTML = q.question;
@@ -322,69 +424,80 @@
                 btn.onclick = () => checkAnswer(answer, q.correctAnswer, btn);
                 answersContainer.appendChild(btn);
             });
+
+            isAnswering = false;
         }
 
         function checkAnswer(selected, correct, button) {
-            const buttons = document.querySelectorAll('.answer-btn');
-            buttons.forEach(btn => btn.disabled = true);
+            if (isAnswering) return; // Prevent multiple answers
+            isAnswering = true;
+
+            totalAnswers++;
 
             if (selected === correct) {
-                button.classList.add('correct');
+                button.classList.add('flash-correct');
                 correctAnswers++;
-                document.getElementById('correctCount').textContent = correctAnswers;
             } else {
-                button.classList.add('wrong');
-                // Highlight correct answer
-                buttons.forEach(btn => {
-                    if (parseInt(btn.textContent) === correct) {
-                        btn.classList.add('correct');
-                    }
-                });
+                button.classList.add('flash-wrong');
             }
 
+            // Immediately show next question after brief flash
             setTimeout(() => {
-                currentQuestion++;
                 showQuestion();
-            }, 1500);
+            }, 300);
         }
 
-        function showResults() {
+        function endQuiz() {
+            clearInterval(timerInterval);
             document.getElementById('quizScreen').classList.add('hidden');
             document.getElementById('resultScreen').classList.remove('hidden');
 
             const score = correctAnswers;
-            const percentage = (score / 10) * 100;
+            const timeTaken = 60 - timeLeft;
 
             let message = '';
-            if (percentage === 100) {
-                message = '🎉 Perfekt! Alle richtig!';
-            } else if (percentage >= 80) {
+            if (score >= 20) {
+                message = '🎉 Unglaublich! Du bist ein Mathe-Genie!';
+            } else if (score >= 15) {
+                message = '🚀 Fantastisch! Sehr schnell!';
+            } else if (score >= 10) {
                 message = '👏 Ausgezeichnet!';
-            } else if (percentage >= 60) {
+            } else if (score >= 5) {
                 message = '👍 Gut gemacht!';
-            } else if (percentage >= 40) {
-                message = '💪 Nicht schlecht!';
             } else {
-                message = '📚 Weiter üben!';
+                message = '💪 Weiter üben!';
             }
 
             document.getElementById('resultMessage').textContent = message;
-            document.getElementById('finalScore').textContent = `${score} / 10`;
+            document.getElementById('finalScore').textContent = `${score} richtig`;
+            document.getElementById('finalTime').textContent = `${totalAnswers} Fragen in 60 Sekunden`;
 
             // Check highscore
             if (score > highscore) {
                 highscore = score;
-                localStorage.setItem('potenzenHighscore', highscore);
+                highscoreTime = 60;
+                localStorage.setItem('potenzenHighscore', JSON.stringify({
+                    score: highscore,
+                    time: highscoreTime
+                }));
                 document.getElementById('highscoreBadge').classList.remove('hidden');
             } else {
                 document.getElementById('highscoreBadge').classList.add('hidden');
+            }
+
+            // Display highscore
+            document.getElementById('resultHighscore').textContent = highscore;
+            if (highscore > 0) {
+                document.getElementById('resultHighscoreTime').textContent = `in ${highscoreTime}s`;
+            } else {
+                document.getElementById('resultHighscoreTime').textContent = '';
             }
         }
 
         function restartQuiz() {
             document.getElementById('resultScreen').classList.add('hidden');
             document.getElementById('startScreen').classList.remove('hidden');
-            document.getElementById('highscoreDisplay').textContent = highscore;
+            updateHighscoreDisplay();
         }
     </script>
 </body>
